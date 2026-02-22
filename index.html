@@ -293,6 +293,11 @@
       margin-top: 32px; color: rgba(255,255,255,0.2); font-size: 12px;
       letter-spacing: 1px; text-transform: uppercase;
     }
+    .menu-credit {
+      margin-top: 20px; font-family: 'Orbitron', sans-serif; font-size: 12px;
+      font-weight: 500; color: rgba(68,170,255,0.4); letter-spacing: 3px;
+      text-transform: uppercase;
+    }
 
     /* ---- Difficulty badge in HUD ---- */
     #diff-badge {
@@ -378,6 +383,14 @@
       transition: opacity 0.2s;
     }
     #combo-display.show { opacity: 1; }
+
+    /* ---- Credit watermark ---- */
+    #credit {
+      position: fixed; bottom: 6px; right: 12px;
+      font-family: 'Orbitron', sans-serif; font-size: 9px; font-weight: 500;
+      color: rgba(255,255,255,0.15); letter-spacing: 2px; text-transform: uppercase;
+      pointer-events: none; z-index: 16;
+    }
   </style>
 </head>
 <body>
@@ -489,6 +502,7 @@
       </button>
     </div>
     <div class="menu-controls">↑↓ Move &nbsp;·&nbsp; ←→ Turn &nbsp;·&nbsp; Space Fire &nbsp;·&nbsp; R Reload</div>
+    <div class="menu-credit">Made by Bimasha</div>
   </div>
 
   <!-- End overlay -->
@@ -513,6 +527,8 @@
     </div>
     <button id="restart-btn">Play Again</button>
   </div>
+
+  <div id="credit">Made by Bimasha</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="game.js"></script>
