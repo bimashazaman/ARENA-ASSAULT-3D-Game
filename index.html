@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARENA ASSAULT</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@500;700;900&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; font-family: 'Rajdhani', sans-serif; background: #000; }
+    body.in-game { cursor: none; }
+    canvas { display: block; }
+
+    /* ---- Crosshair ---- */
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 20; width: 32px; height: 32px;
+    }
+    .ch-line {
+      position: absolute; background: rgba(255,255,255,0.75);
+    }
+    .ch-top    { width: 2px; height: 8px; left: 15px; top: 0; }
+    .ch-bottom { width: 2px; height: 8px; left: 15px; bottom: 0; }
+    .ch-left   { width: 8px; height: 2px; top: 15px; left: 0; }
+    .ch-right  { width: 8px; height: 2px; top: 15px; right: 0; }
+    .ch-dot {
+      position: absolute; width: 4px; height: 4px; background: #ff3333;
+      border-radius: 50%; top: 14px; left: 14px;
+      box-shadow: 0 0 6px 2px rgba(255,50,50,0.6);
+    }
+
+    /* ---- HUD Container ---- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
+
+    /* ---- Top bar ---- */
+    #top-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 48px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 24px;
+    }
+    #game-timer {
+      font-family: 'Orbitron', sans-serif; font-size: 18px; font-weight: 700;
+      color: rgba(255,255,255,0.8); letter-spacing: 2px;
+    }
+
+    /* ---- Bottom HUD ---- */
+    #bottom-hud {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 16px 24px;
+    }
+
+    /* Health panel */
+    .stat-panel {
+      background: rgba(0,5,15,0.75); border: 1px solid rgba(100,180,255,0.15);
+      border-radius: 4px; padding: 12px 16px; min-width: 200px;
+      backdrop-filter: blur(6px);
+    }
+    .stat-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255,255,255,0.4); margin-bottom: 6px;
+    }
+    .health-row { display: flex; align-items: center; gap: 10px; }
+    .health-icon { font-size: 22px; }
+    .health-value {
+      font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 700;
+      min-width: 42px;
+    }
+    .player-value { color: #4af; }
+    .enemy-value { color: #f55; }
+    .bar-track {
+      flex: 1; height: 6px; background: rgba(255,255,255,0.08);
+      border-radius: 3px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 3px; transition: width 0.15s ease-out;
+    }
+    .player-fill { background: linear-gradient(90deg, #1a6fff, #4af); }
+    .enemy-fill { background: linear-gradient(90deg, #cc2222, #ff5555); }
+
+    /* Ammo panel */
+    #ammo-panel {
+      text-align: right;
+      background: rgba(0,5,15,0.75); border: 1px solid rgba(100,180,255,0.15);
+      border-radius: 4px; padding: 12px 16px;
+      backdrop-filter: blur(6px);
+    }
+    #ammo-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255,255,255,0.4); margin-bottom: 4px;
+    }
+    #ammo-count {
+      font-family: 'Orbitron', sans-serif; font-size: 36px; font-weight: 700;
+      color: #fff;
+    }
+    #ammo-max { font-size: 16px; color: rgba(255,255,255,0.3); }
+
+    /* ---- Minimap ---- */
+    #minimap-container {
+      position: absolute; top: 56px; right: 16px;
+    }
+    #minimap {
+      width: 140px; height: 140px; border-radius: 50%;
+      border: 2px solid rgba(100,180,255,0.25);
+      background: rgba(0,5,15,0.7); backdrop-filter: blur(4px);
+      overflow: hidden; position: relative;
+    }
+    #minimap-canvas { width: 100%; height: 100%; }
+
+    /* ---- Damage indicator ---- */
+    .dmg-indicator {
+      position: fixed; top: 50%; left: 50%; width: 200px; height: 200px;
+      transform: translate(-50%, -50%); pointer-events: none; z-index: 18;
+      opacity: 0; transition: opacity 0.1s;
+    }
+    .dmg-indicator.active { opacity: 1; }
+    .dmg-arrow {
+      position: absolute; width: 0; height: 0;
+      border-left: 8px solid transparent; border-right: 8px solid transparent;
+      border-bottom: 20px solid rgba(255,0,0,0.7);
+    }
+
+    /* ---- Hit marker ---- */
+    #hitmarker {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 19; opacity: 0; transition: opacity 0.05s;
+    }
+    #hitmarker.active { opacity: 1; }
+    .hm-line {
+      position: absolute; background: #fff; width: 10px; height: 2px;
+      transform-origin: left center;
+    }
+    .hm-1 { transform: translate(4px, -5px) rotate(45deg); }
+    .hm-2 { transform: translate(-12px, -5px) rotate(-45deg); }
+    .hm-3 { transform: translate(4px, 3px) rotate(-45deg); }
+    .hm-4 { transform: translate(-12px, 3px) rotate(45deg); }
+
+    /* ---- Kill feed ---- */
+    #kill-feed {
+      position: absolute; top: 56px; left: 16px;
+      font-size: 13px; color: rgba(255,255,255,0.7);
+    }
+    .feed-entry {
+      background: rgba(0,0,0,0.5); padding: 4px 10px; margin-bottom: 4px;
+      border-radius: 3px; border-left: 3px solid #f44;
+      animation: feedIn 0.3s ease-out;
+    }
+    @keyframes feedIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: none; } }
+
+    /* ---- Screen effects ---- */
+    #hit-flash {
+      position: fixed; inset: 0; pointer-events: none; z-index: 12;
+      opacity: 0; transition: opacity 0.08s;
+    }
+    #hit-flash.active { opacity: 1; }
+    #hit-vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 11;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+    }
+    #low-health-pulse {
+      position: fixed; inset: 0; pointer-events: none; z-index: 10;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(180,0,0,0.3) 100%);
+      opacity: 0;
+    }
+
+    /* ---- Controls hint ---- */
+    #controls {
+      position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.3); font-size: 12px; letter-spacing: 1px;
+    }
+
+    /* ---- Overlay ---- */
+    #overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+      z-index: 100; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #overlay.active { display: flex; pointer-events: auto; }
+    #overlay h1 {
+      font-family: 'Orbitron', sans-serif; font-size: 56px;
+      margin-bottom: 8px; letter-spacing: 4px;
+    }
+    #overlay p {
+      font-size: 18px; color: rgba(255,255,255,0.5); margin-bottom: 32px;
+    }
+    #overlay .stats-row {
+      display: flex; gap: 32px; margin-bottom: 28px;
+    }
+    .end-stat {
+      text-align: center; padding: 12px 20px;
+      background: rgba(255,255,255,0.05); border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .end-stat-val {
+      font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 700; color: #fff;
+    }
+    .end-stat-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+      color: rgba(255,255,255,0.4); margin-top: 4px;
+    }
+    #restart-btn {
+      padding: 14px 48px; font-size: 16px; font-weight: 700; font-family: 'Rajdhani', sans-serif;
+      background: linear-gradient(135deg, #1a6fff, #4af); color: #fff;
+      border: none; border-radius: 4px; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 2px;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 20px rgba(68,170,255,0.3);
+    }
+    #restart-btn:hover { transform: scale(1.05); box-shadow: 0 6px 30px rgba(68,170,255,0.5); }
+
+    /* ---- Start Menu ---- */
+    #start-menu {
+      position: fixed; inset: 0; z-index: 200;
+      background: radial-gradient(ellipse at 50% 40%, rgba(15,20,40,0.95) 0%, rgba(5,5,12,0.98) 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      backdrop-filter: blur(12px);
+    }
+    #start-menu.hidden { display: none; }
+    .menu-glow {
+      position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+      width: 500px; height: 300px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(68,170,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .menu-title {
+      font-family: 'Orbitron', sans-serif; font-size: 64px; font-weight: 900;
+      letter-spacing: 8px; color: #fff; margin-bottom: 8px;
+      text-shadow: 0 0 40px rgba(68,170,255,0.4), 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .menu-sub {
+      font-size: 16px; text-transform: uppercase; letter-spacing: 3px;
+      color: rgba(255,255,255,0.4); margin-bottom: 36px;
+    }
+    .diff-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+      max-width: 520px; width: 90%;
+    }
+    .diff-btn {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 20px 18px; cursor: pointer;
+      text-align: left; transition: all 0.2s ease; position: relative; overflow: hidden;
+    }
+    .diff-btn:hover {
+      background: rgba(68,170,255,0.1); border-color: rgba(68,170,255,0.4);
+      transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .diff-btn[data-diff="easy"]:hover { border-color: #4a4; box-shadow: 0 4px 20px rgba(68,170,68,0.2); }
+    .diff-btn[data-diff="normal"]:hover { border-color: #4af; box-shadow: 0 4px 20px rgba(68,170,255,0.2); }
+    .diff-btn[data-diff="hard"]:hover { border-color: #fa4; box-shadow: 0 4px 20px rgba(255,170,68,0.2); }
+    .diff-btn[data-diff="nightmare"]:hover { border-color: #f33; box-shadow: 0 4px 20px rgba(255,50,50,0.2); }
+    .diff-icon {
+      display: block; font-size: 18px; margin-bottom: 6px;
+    }
+    .diff-btn[data-diff="easy"] .diff-icon { color: #4a4; }
+    .diff-btn[data-diff="normal"] .diff-icon { color: #4af; }
+    .diff-btn[data-diff="hard"] .diff-icon { color: #fa4; }
+    .diff-btn[data-diff="nightmare"] .diff-icon { color: #f33; }
+    .diff-name {
+      display: block; font-family: 'Orbitron', sans-serif; font-size: 18px;
+      font-weight: 700; color: #fff; margin-bottom: 4px; letter-spacing: 1px;
+    }
+    .diff-desc {
+      display: block; font-size: 12px; color: rgba(255,255,255,0.35); line-height: 1.4;
+    }
+    .menu-controls {
+      margin-top: 32px; color: rgba(255,255,255,0.2); font-size: 12px;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* ---- Difficulty badge in HUD ---- */
+    #diff-badge {
+      font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 3px; min-width: 80px; text-align: center;
+    }
+
+    /* ---- End screen difficulty buttons ---- */
+    #end-diff-select { margin-bottom: 20px; text-align: center; }
+    .end-diff-row { display: flex; gap: 8px; justify-content: center; }
+    .end-diff-btn {
+      padding: 6px 16px; font-size: 13px; font-weight: 600;
+      font-family: 'Rajdhani', sans-serif; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.5);
+      border-radius: 4px; cursor: pointer; transition: all 0.15s;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .end-diff-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .end-diff-btn.active {
+      color: #fff; border-color: #4af; background: rgba(68,170,255,0.15);
+    }
+    .end-diff-btn[data-diff="easy"].active { border-color: #4a4; background: rgba(68,170,68,0.15); }
+    .end-diff-btn[data-diff="hard"].active { border-color: #fa4; background: rgba(255,170,68,0.15); }
+    .end-diff-btn[data-diff="nightmare"].active { border-color: #f33; background: rgba(255,50,50,0.15); }
+
+    /* ---- Wave indicator ---- */
+    #wave-indicator {
+      font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700;
+      color: #fa4; letter-spacing: 3px; margin-bottom: 2px;
+    }
+
+    /* ---- Score ---- */
+    #score-display {
+      font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 700;
+      color: #fff; min-width: 80px; text-align: right; letter-spacing: 1px;
+    }
+
+    /* ---- Stamina bar ---- */
+    #stamina-container {
+      width: 120px; height: 4px; background: rgba(255,255,255,0.08);
+      border-radius: 2px; overflow: hidden;
+    }
+    #stamina-bar {
+      width: 100%; height: 100%; background: linear-gradient(90deg, #fa0, #ff4);
+      border-radius: 2px; transition: width 0.1s;
+    }
+
+    /* ---- Pickup notification ---- */
+    #pickup-notify {
+      position: fixed; top: 45%; left: 50%; transform: translateX(-50%);
+      font-family: 'Orbitron', sans-serif; font-size: 14px; font-weight: 700;
+      letter-spacing: 2px; color: #fff; pointer-events: none; z-index: 25;
+      text-shadow: 0 0 10px currentColor; opacity: 0;
+      transition: opacity 0.15s, top 0.4s;
+    }
+    #pickup-notify.show { opacity: 1; top: 42%; }
+
+    /* ---- Wave banner ---- */
+    #wave-banner {
+      position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif; font-size: 36px; font-weight: 900;
+      letter-spacing: 6px; color: #fa4; pointer-events: none; z-index: 25;
+      text-shadow: 0 0 30px rgba(255,170,0,0.5); opacity: 0;
+    }
+    #wave-banner.show {
+      animation: wavePop 2s ease-out forwards;
+    }
+    @keyframes wavePop {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      30% { transform: translate(-50%, -50%) scale(1); }
+      70% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+    }
+
+    /* ---- Combo indicator ---- */
+    #combo-display {
+      position: fixed; top: 52%; right: 24px; transform: translateY(-50%);
+      font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 700;
+      color: #ff4; pointer-events: none; z-index: 25; opacity: 0;
+      text-shadow: 0 0 10px rgba(255,255,0,0.5);
+      transition: opacity 0.2s;
+    }
+    #combo-display.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <!-- Crosshair -->
+  <div id="crosshair">
+    <div class="ch-line ch-top"></div>
+    <div class="ch-line ch-bottom"></div>
+    <div class="ch-line ch-left"></div>
+    <div class="ch-line ch-right"></div>
+    <div class="ch-dot"></div>
+  </div>
+
+  <!-- Hit marker -->
+  <div id="hitmarker">
+    <div class="hm-line hm-1"></div>
+    <div class="hm-line hm-2"></div>
+    <div class="hm-line hm-3"></div>
+    <div class="hm-line hm-4"></div>
+  </div>
+
+  <!-- Pickup notification -->
+  <div id="pickup-notify"></div>
+  <div id="wave-banner"></div>
+  <div id="combo-display"></div>
+
+  <!-- Screen effects -->
+  <div id="hit-flash"></div>
+  <div id="hit-vignette"></div>
+  <div id="low-health-pulse"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="top-bar">
+      <div id="diff-badge"></div>
+      <div style="text-align:center">
+        <div id="wave-indicator">WAVE 1</div>
+        <div id="game-timer">00:00</div>
+      </div>
+      <div id="score-display">0</div>
+    </div>
+
+    <div id="minimap-container">
+      <div id="minimap"><canvas id="minimap-canvas" width="140" height="140"></canvas></div>
+    </div>
+
+    <div id="kill-feed"></div>
+
+    <div id="bottom-hud">
+      <div class="stat-panel">
+        <div class="stat-label">Health</div>
+        <div class="health-row">
+          <div class="health-value player-value" id="player-hp">100</div>
+          <div class="bar-track"><div class="bar-fill player-fill" id="player-bar" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+        <div id="stamina-container">
+          <div id="stamina-bar"></div>
+        </div>
+        <div id="controls">↑↓ MOVE · ←→ TURN · SPACE FIRE · SHIFT SPRINT · R RELOAD</div>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:flex-end;">
+        <div class="stat-panel">
+          <div class="stat-label">Target</div>
+          <div class="health-row">
+            <div class="health-value enemy-value" id="enemy-hp">100</div>
+            <div class="bar-track"><div class="bar-fill enemy-fill" id="enemy-bar" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div id="ammo-panel">
+          <div id="ammo-label">Ammo</div>
+          <div><span id="ammo-count">30</span><span id="ammo-max"> / 30</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start menu -->
+  <div id="start-menu">
+    <div class="menu-glow"></div>
+    <h1 class="menu-title">ARENA ASSAULT</h1>
+    <p class="menu-sub">Select Difficulty</p>
+    <div class="diff-grid">
+      <button class="diff-btn" data-diff="easy">
+        <span class="diff-icon">&#9733;</span>
+        <span class="diff-name">Easy</span>
+        <span class="diff-desc">Slow enemy, low damage. Learn the ropes.</span>
+      </button>
+      <button class="diff-btn" data-diff="normal">
+        <span class="diff-icon">&#9733;&#9733;</span>
+        <span class="diff-name">Normal</span>
+        <span class="diff-desc">Balanced challenge for most players.</span>
+      </button>
+      <button class="diff-btn" data-diff="hard">
+        <span class="diff-icon">&#9733;&#9733;&#9733;</span>
+        <span class="diff-name">Hard</span>
+        <span class="diff-desc">Fast, accurate, aggressive enemy.</span>
+      </button>
+      <button class="diff-btn" data-diff="nightmare">
+        <span class="diff-icon">&#9760;</span>
+        <span class="diff-name">Nightmare</span>
+        <span class="diff-desc">Relentless. Good luck surviving.</span>
+      </button>
+    </div>
+    <div class="menu-controls">↑↓ Move &nbsp;·&nbsp; ←→ Turn &nbsp;·&nbsp; Space Fire &nbsp;·&nbsp; R Reload</div>
+  </div>
+
+  <!-- End overlay -->
+  <div id="overlay">
+    <h1 id="overlay-title"></h1>
+    <p id="overlay-sub"></p>
+    <div class="stats-row">
+      <div class="end-stat"><div class="end-stat-val" id="stat-score">0</div><div class="end-stat-label">Score</div></div>
+      <div class="end-stat"><div class="end-stat-val" id="stat-wave">1</div><div class="end-stat-label">Wave</div></div>
+      <div class="end-stat"><div class="end-stat-val" id="stat-hits">0</div><div class="end-stat-label">Hits</div></div>
+      <div class="end-stat"><div class="end-stat-val" id="stat-acc">0%</div><div class="end-stat-label">Accuracy</div></div>
+      <div class="end-stat"><div class="end-stat-val" id="stat-time">00:00</div><div class="end-stat-label">Time</div></div>
+    </div>
+    <div id="end-diff-select">
+      <p style="color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Change Difficulty</p>
+      <div class="end-diff-row">
+        <button class="end-diff-btn" data-diff="easy">Easy</button>
+        <button class="end-diff-btn" data-diff="normal">Normal</button>
+        <button class="end-diff-btn" data-diff="hard">Hard</button>
+        <button class="end-diff-btn" data-diff="nightmare">Nightmare</button>
+      </div>
+    </div>
+    <button id="restart-btn">Play Again</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
