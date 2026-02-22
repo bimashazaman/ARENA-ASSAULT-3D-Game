@@ -14,20 +14,45 @@
     /* ---- Crosshair ---- */
     #crosshair {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      pointer-events: none; z-index: 20; width: 32px; height: 32px;
+      pointer-events: none; z-index: 20; width: 40px; height: 40px;
+      transition: width 0.06s, height 0.06s;
     }
+    #crosshair.firing { width: 56px; height: 56px; }
     .ch-line {
-      position: absolute; background: rgba(255,255,255,0.75);
+      position: absolute; background: rgba(255,255,255,0.85);
+      transition: all 0.06s ease-out;
     }
-    .ch-top    { width: 2px; height: 8px; left: 15px; top: 0; }
-    .ch-bottom { width: 2px; height: 8px; left: 15px; bottom: 0; }
-    .ch-left   { width: 8px; height: 2px; top: 15px; left: 0; }
-    .ch-right  { width: 8px; height: 2px; top: 15px; right: 0; }
+    .ch-top    { width: 2px; height: 10px; left: 50%; margin-left: -1px; top: 0; }
+    .ch-bottom { width: 2px; height: 10px; left: 50%; margin-left: -1px; bottom: 0; }
+    .ch-left   { width: 10px; height: 2px; top: 50%; margin-top: -1px; left: 0; }
+    .ch-right  { width: 10px; height: 2px; top: 50%; margin-top: -1px; right: 0; }
     .ch-dot {
       position: absolute; width: 4px; height: 4px; background: #ff3333;
-      border-radius: 50%; top: 14px; left: 14px;
-      box-shadow: 0 0 6px 2px rgba(255,50,50,0.6);
+      border-radius: 50%; top: 50%; left: 50%; margin-top: -2px; margin-left: -2px;
+      box-shadow: 0 0 8px 3px rgba(255,50,50,0.7);
     }
+    #crosshair.firing .ch-dot {
+      background: #fff;
+      box-shadow: 0 0 12px 4px rgba(255,255,255,0.8);
+    }
+
+    /* ---- Muzzle flash overlay ---- */
+    #muzzle-flash {
+      position: fixed; bottom: 15%; left: 50%; transform: translateX(-50%);
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,220,100,0.9) 0%, rgba(255,150,30,0.5) 30%, transparent 70%);
+      pointer-events: none; z-index: 18; opacity: 0;
+      transition: opacity 0.03s;
+    }
+    #muzzle-flash.active { opacity: 1; }
+
+    /* ---- Screen flash on shoot ---- */
+    #shoot-flash {
+      position: fixed; inset: 0; pointer-events: none; z-index: 8;
+      background: radial-gradient(ellipse at 50% 80%, rgba(255,200,80,0.12) 0%, transparent 60%);
+      opacity: 0;
+    }
+    #shoot-flash.active { opacity: 1; }
 
     /* ---- HUD Container ---- */
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
@@ -377,6 +402,10 @@
   <div id="pickup-notify"></div>
   <div id="wave-banner"></div>
   <div id="combo-display"></div>
+
+  <!-- Shooting effects -->
+  <div id="muzzle-flash"></div>
+  <div id="shoot-flash"></div>
 
   <!-- Screen effects -->
   <div id="hit-flash"></div>

@@ -74,7 +74,7 @@
 
   const keys = { up: false, down: false, left: false, right: false, space: false, shift: false };
 
-  const player = { x: 0, z: 12, yaw: Math.PI, hp: 100, ammo: 30, reloading: false, reloadStart: 0, stamina: 100 };
+  const player = { x: 0, z: 12, yaw: 0, hp: 100, ammo: 30, reloading: false, reloadStart: 0, stamina: 100 };
   const enemy = {
     x: 0, z: -12, hp: 120, mesh: null, lastShot: 0,
     targetX: 0, targetZ: -12, retargetAt: 0,
@@ -84,7 +84,7 @@
 
   let camShakeX = 0, camShakeY = 0, camShakeDecay = 0;
   let headBobPhase = 0;
-  let smoothYaw = Math.PI;
+  let smoothYaw = 0;
 
   const dom = {};
   function cacheDom() {
@@ -92,6 +92,7 @@
      'overlayTitle', 'overlaySub', 'restartBtn', 'gameTimer', 'ammoCount',
      'hitmarker', 'lowHealthPulse', 'killFeed', 'scoreDisplay',
      'waveIndicator', 'staminaBar', 'pickupNotify', 'waveBanner', 'comboDisplay',
+     'muzzleFlash', 'shootFlash',
      'statHits', 'statAcc', 'statTime', 'statScore', 'statWave'].forEach(id => {
       const elId = id.replace(/([A-Z])/g, '-$1').toLowerCase();
       dom[id] = document.getElementById(elId);
@@ -163,7 +164,7 @@
 
     applyDifficulty('normal');
     camera.position.set(0, CFG.playerEye, 12);
-    camera.rotation.set(0, Math.PI, 0);
+    camera.rotation.set(0, 0, 0);
     renderer.render(scene, camera);
   }
 
@@ -579,7 +580,7 @@
 
   // ---- Reset ----
   function resetGame() {
-    player.x = 0; player.z = 12; player.yaw = Math.PI; player.hp = CFG.maxHp;
+    player.x = 0; player.z = 12; player.yaw = 0; player.hp = CFG.maxHp;
     player.ammo = CFG.maxAmmo; player.reloading = false; player.stamina = CFG.maxStamina;
     enemy.x = 0; enemy.z = -12; enemy.hp = CFG.aiHp; enemy.lastShot = 0;
     enemy.retargetAt = 0; enemy.state = 'patrol'; enemy.burstRemaining = 0;
@@ -645,6 +646,7 @@
 
   // ---- Shooting ----
   let lastPlayerShot = 0;
+  let muzzleFlashMesh = null;
 
   function playerShoot() {
     const now = performance.now();
@@ -655,28 +657,120 @@
     player.ammo--;
     shotsFired++;
 
-    const dx = Math.sin(player.yaw);
-    const dz = Math.cos(player.yaw);
-    spawnBullet(player.x + dx * 0.5, player.z + dz * 0.5, dx, dz, true);
+    const dx = -Math.sin(player.yaw);
+    const dz = -Math.cos(player.yaw);
+    spawnBullet(player.x + dx * 0.8, player.z + dz * 0.8, dx, dz, true);
 
+    // Gun recoil (stronger kick)
     if (gunGroup) {
-      gunGroup.position.z = gunDefaultZ + 0.12;
-      gunGroup.rotation.x = -0.08;
+      gunGroup.position.z = gunDefaultZ + 0.16;
+      gunGroup.rotation.x = -0.12;
+      gunGroup.position.x = 0.28 + (Math.random() - 0.5) * 0.01;
     }
-    addScreenShake(0.015);
+
+    // 3D muzzle flash at gun tip
+    showMuzzleFlash3D();
+
+    // Screen muzzle flash overlay
+    const mf = document.getElementById('muzzle-flash');
+    mf.classList.add('active');
+    setTimeout(() => mf.classList.remove('active'), 50);
+
+    // Subtle screen light flash
+    const sf = document.getElementById('shoot-flash');
+    sf.classList.add('active');
+    setTimeout(() => sf.classList.remove('active'), 40);
+
+    // Crosshair spread
+    const ch = document.getElementById('crosshair');
+    ch.classList.add('firing');
+    setTimeout(() => ch.classList.remove('firing'), 100);
+
+    addScreenShake(0.02);
+  }
+
+  function showMuzzleFlash3D() {
+    if (muzzleFlashMesh) {
+      gunGroup.remove(muzzleFlashMesh);
+      muzzleFlashMesh.geometry.dispose();
+      muzzleFlashMesh.material.dispose();
+    }
+    const flashGeo = new THREE.SphereGeometry(0.06, 6, 6);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: 0xffdd66, transparent: true, opacity: 1
+    });
+    muzzleFlashMesh = new THREE.Mesh(flashGeo, flashMat);
+    muzzleFlashMesh.position.set(0, 0.02, -0.56);
+    muzzleFlashMesh.scale.set(2, 2, 3);
+
+    const flashLight = new THREE.PointLight(0xffaa33, 2, 6);
+    muzzleFlashMesh.add(flashLight);
+
+    gunGroup.add(muzzleFlashMesh);
+
+    setTimeout(() => {
+      if (muzzleFlashMesh && gunGroup) {
+        gunGroup.remove(muzzleFlashMesh);
+        muzzleFlashMesh = null;
+      }
+    }, 50);
   }
 
   function spawnBullet(x, z, dx, dz, isPlayer) {
     const color = isPlayer ? 0x44ffaa : 0xff3300;
+    const bulletSize = isPlayer ? 0.14 : 0.12;
+
+    // Main bullet sphere
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(CFG.bulletRadius, 6, 6),
+      new THREE.SphereGeometry(bulletSize, 8, 8),
       new THREE.MeshBasicMaterial({ color })
     );
     mesh.position.set(x, CFG.playerEye * 0.65, z);
-    mesh.userData = { vx: dx * CFG.bulletSpeed, vz: dz * CFG.bulletSpeed };
-    mesh.add(new THREE.PointLight(color, 0.4, 3));
+    mesh.userData = { vx: dx * CFG.bulletSpeed, vz: dz * CFG.bulletSpeed, trail: [] };
+
+    // Bright glow light
+    const glow = new THREE.PointLight(color, isPlayer ? 0.8 : 0.5, isPlayer ? 6 : 4);
+    mesh.add(glow);
+
+    // Outer glow halo
+    const haloMat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.25
+    });
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(bulletSize * 2.5, 6, 6), haloMat);
+    mesh.add(halo);
+
     scene.add(mesh);
     (isPlayer ? playerBullets : aiBullets).push(mesh);
+  }
+
+  function updateBulletTrails(dt) {
+    const allBullets = [...playerBullets, ...aiBullets];
+    for (const b of allBullets) {
+      const trail = b.userData.trail;
+      if (!trail) continue;
+
+      trail.push(b.position.clone());
+      if (trail.length > 6) {
+        trail.shift();
+      }
+
+      // Remove old trail mesh
+      const oldTrail = b.getObjectByName('trailLine');
+      if (oldTrail) { b.remove(oldTrail); oldTrail.geometry.dispose(); }
+
+      if (trail.length >= 2) {
+        const points = trail.map(p => new THREE.Vector3(p.x - b.position.x, p.y - b.position.y, p.z - b.position.z));
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const isP = playerBullets.includes(b);
+        const mat = new THREE.LineBasicMaterial({
+          color: isP ? 0x44ffaa : 0xff3300,
+          transparent: true, opacity: 0.5
+        });
+        const line = new THREE.Line(geo, mat);
+        line.name = 'trailLine';
+        b.add(line);
+      }
+    }
   }
 
   function addScreenShake(intensity) { camShakeDecay = Math.max(camShakeDecay, intensity); }
@@ -773,8 +867,8 @@
 
   function fireAIShot(toPx, toPz, toPDist) {
     const timeToHit = toPDist / CFG.bulletSpeed;
-    const pVelX = keys.up ? Math.sin(player.yaw) * CFG.moveSpeed : keys.down ? -Math.sin(player.yaw) * CFG.moveSpeed : 0;
-    const pVelZ = keys.up ? Math.cos(player.yaw) * CFG.moveSpeed : keys.down ? -Math.cos(player.yaw) * CFG.moveSpeed : 0;
+    const pVelX = keys.up ? -Math.sin(player.yaw) * CFG.moveSpeed : keys.down ? Math.sin(player.yaw) * CFG.moveSpeed : 0;
+    const pVelZ = keys.up ? -Math.cos(player.yaw) * CFG.moveSpeed : keys.down ? Math.cos(player.yaw) * CFG.moveSpeed : 0;
 
     let aimX = toPx + pVelX * timeToHit * CFG.aiLeadFactor * 16;
     let aimZ = toPz + pVelZ * timeToHit * CFG.aiLeadFactor * 16;
@@ -797,7 +891,8 @@
       b.position.x += b.userData.vx * dt;
       b.position.z += b.userData.vz * dt;
       if (Math.abs(b.position.x) > half || Math.abs(b.position.z) > half) {
-        spawnParticles(b.position.x, b.position.y, b.position.z, 0x44ffaa, 4, 0.15);
+        spawnParticles(b.position.x, b.position.y, b.position.z, 0x44ffaa, 8, 0.25);
+        spawnParticles(b.position.x, b.position.y, b.position.z, 0xffffff, 4, 0.15);
         scene.remove(b); playerBullets.splice(i, 1); continue;
       }
       if (enemy.hp > 0) {
@@ -808,7 +903,8 @@
           shotsHit++;
           hitCombo();
           addScore(100, 'Hit');
-          spawnParticles(b.position.x, CFG.playerEye*0.7, b.position.z, 0xff4444, 8, 0.25);
+          spawnParticles(b.position.x, CFG.playerEye*0.7, b.position.z, 0xff4444, 12, 0.35);
+          spawnParticles(b.position.x, CFG.playerEye*0.7, b.position.z, 0xffaa00, 6, 0.2);
           scene.remove(b); playerBullets.splice(i, 1);
           showHitmarker();
           if (enemy.hp <= 0) {
@@ -827,7 +923,8 @@
       b.position.x += b.userData.vx * dt;
       b.position.z += b.userData.vz * dt;
       if (Math.abs(b.position.x) > half || Math.abs(b.position.z) > half) {
-        spawnParticles(b.position.x, b.position.y, b.position.z, 0xff3300, 4, 0.15);
+        spawnParticles(b.position.x, b.position.y, b.position.z, 0xff3300, 8, 0.25);
+        spawnParticles(b.position.x, b.position.y, b.position.z, 0xff8800, 4, 0.15);
         scene.remove(b); aiBullets.splice(i, 1); continue;
       }
       const dx = b.position.x - player.x, dz = b.position.z - player.z;
@@ -945,8 +1042,8 @@
 
     // Movement
     let mx = 0, mz = 0, isMoving = false;
-    if (keys.up) { mx += Math.sin(smoothYaw); mz += Math.cos(smoothYaw); isMoving = true; }
-    if (keys.down) { mx -= Math.sin(smoothYaw); mz -= Math.cos(smoothYaw); isMoving = true; }
+    if (keys.up) { mx -= Math.sin(smoothYaw); mz -= Math.cos(smoothYaw); isMoving = true; }
+    if (keys.down) { mx += Math.sin(smoothYaw); mz += Math.cos(smoothYaw); isMoving = true; }
     if (mx !== 0 || mz !== 0) {
       const len = Math.sqrt(mx*mx + mz*mz);
       player.x += (mx/len) * currentSpeed * dt;
@@ -988,6 +1085,7 @@
 
     updateAI(dt);
     updateBullets(dt);
+    updateBulletTrails(dt);
     updatePickups(dt);
     updateParticles(dt);
     updateHUD();
